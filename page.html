@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sparring Partner</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background-color: #222; color: #fff; padding: 20px; }
+        h1 { color: #f4d03f; }
+        .controls { margin: 20px 0; }
+        button { padding: 15px 30px; font-size: 1.2rem; border: none; border-radius: 8px; cursor: pointer; margin: 10px; }
+        .btn-start { background-color: #2ecc71; color: white; }
+        .btn-stop { background-color: #e74c3c; color: white; }
+        .btn-continue { background-color: #3498db; color: white; }
+        #status { font-size: 2rem; margin-top: 20px; font-weight: bold; height: 50px; }
+        #timer { font-size: 3rem; color: #f4d03f; margin: 20px 0; }
+        .settings { margin-top: 30px; text-align: left; display: inline-block; }
+        input { padding: 5px; width: 60px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <h1>🥊 AI Sparring Partner</h1>
+
+    <div id="timer">00:00</div>
+    <div id="status">Ready</div>
+
+    <div class="controls">
+        <button class="btn-start" onclick="startSparring()">Start Round</button>
+        <button id="stopBtn" class="btn-stop" onclick="toggleSparring()">Stop</button>
+    </div>
+
+    <div class="settings">
+        <label>Round Time (min): <input type="number" id="roundTime" value="3"></label><br><br>
+        <label>Min Interval (sec): <input type="number" id="minInt" value="2"></label><br>
+        <label>Max Interval (sec): <input type="number" id="maxInt" value="5"></label>
+    </div>
+
+    <script>
+        // === Configuration ===
+        const myAttacks = ["Jab", "Cross", "Hook", "Uppercut", "One Two", "Low Kick", "Body Shot"];
+        const opponentAttacks = ["Parry!", "Block High!", "Slip Left!", "Slip Right!", "Check Kick!", "Sprawl!"];
+
+        let isRunning = false;
+        let roundTimer;
+        let actionTimer;
+        let timeLeft = 0;
+
+        const statusEl = document.getElementById("status");
+        const timerEl = document.getElementById("timer");
+
+        // === Text to Speech Setup ===
+        const synth = window.speechSynthesis;
+
+        function speak(text, type) {
+            if (synth.speaking) {
+                console.log("Already speaking..."); // Prevent overlap if needed, or let it queue
+            }
+            const utterThis = new SpeechSynthesisUtterance(text);
+            
+            // Customize voices based on type
+            if (type === 'opponent') {
+                utterThis.pitch = 0.6; // Deeper voice for defense commands
+                utterThis.rate = 1.2;  // Urgent speed
+            } else {
+                utterThis.pitch = 1.2; // Higher/Normal pitch for your attacks
+                utterThis.rate = 1.0;
+            }
+            
+            synth.speak(utterThis);
+        }
+
+        // === Game Logic ===
+        function startSparring() {
+            if (isRunning) return;
+            isRunning = true;
+            statusEl.innerText = "FIGHT!";
+            speak("Fight!", "normal");
+            updateStopButton(true);
+
+            // Set Round Time
+            let minutes = document.getElementById("roundTime").value;
+            timeLeft = minutes * 60;
+            updateTimerDisplay();
+
+            // Start Countdown
+            roundTimer = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                if (timeLeft <= 0) stopSparring(true);
+            }, 1000);
+
+            // Start Action Loop
+            scheduleNextMove();
+        }
+
+        function toggleSparring() {
+            if (isRunning) {
+                stopSparring();
+            } else {
+                continueSparring();
+            }
+        }
+
+        function stopSparring(finished = false) {
+            isRunning = false;
+            clearInterval(roundTimer);
+            clearTimeout(actionTimer);
+            synth.cancel(); // Stop speaking immediately
+            statusEl.innerText = finished ? "Round Over" : "Paused";
+            if(finished) {
+                speak("Time!", "normal");
+                updateStopButton(true);
+            } else {
+                updateStopButton(false);
+            }
+        }
+
+        function continueSparring() {
+            if (timeLeft <= 0) {
+                alert("Round is over! Start a new round.");
+                return;
+            }
+            isRunning = true;
+            statusEl.innerText = "FIGHT!";
+            speak("Fight!", "normal");
+            updateStopButton(true);
+
+            // Resume Countdown
+            roundTimer = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                if (timeLeft <= 0) stopSparring(true);
+            }, 1000);
+
+            // Resume Action Loop
+            scheduleNextMove();
+        }
+
+        function updateStopButton(isStop) {
+            const btn = document.getElementById("stopBtn");
+            if (isStop) {
+                btn.innerText = "Stop";
+                btn.className = "btn-stop";
+            } else {
+                btn.innerText = "Continue";
+                btn.className = "btn-continue";
+            }
+        }
+
+        function scheduleNextMove() {
+            if (!isRunning) return;
+
+            // 1. Decide if it's My Attack or Opponent Attack (70% chance my attack, 30% defense)
+            const isDefense = Math.random() < 0.3; 
+            
+            // 2. Pick a random move
+            let moveText = "";
+            let type = "normal";
+
+            if (isDefense) {
+                const randIndex = Math.floor(Math.random() * opponentAttacks.length);
+                moveText = opponentAttacks[randIndex];
+                type = "opponent";
+            } else {
+                const randIndex = Math.floor(Math.random() * myAttacks.length);
+                moveText = myAttacks[randIndex];
+                type = "normal";
+            }
+
+            // 3. Update Visual & Audio
+            statusEl.innerText = moveText;
+            speak(moveText, type);
+
+            // 4. Schedule next call (Random interval between Min and Max)
+            const min = parseInt(document.getElementById("minInt").value) * 1000;
+            const max = parseInt(document.getElementById("maxInt").value) * 1000;
+            const randomDelay = Math.floor(Math.random() * (max - min + 1) + min);
+
+            actionTimer = setTimeout(scheduleNextMove, randomDelay);
+        }
+
+        function updateTimerDisplay() {
+            const m = Math.floor(timeLeft / 60);
+            const s = timeLeft % 60;
+            timerEl.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+    </script>
+</body>
+</html>
