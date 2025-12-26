@@ -14,6 +14,7 @@
         .btn-continue { background-color: #3498db; color: white; }
         #status { font-size: 2rem; margin-top: 20px; font-weight: bold; height: 50px; }
         #timer { font-size: 3rem; color: #f4d03f; margin: 20px 0; }
+        #roundCounter { font-size: 1.5rem; color: #3498db; margin: 10px 0; }
         .settings { margin-top: 30px; text-align: left; display: inline-block; }
         input { padding: 5px; width: 60px; text-align: center; }
     </style>
@@ -22,6 +23,7 @@
 
     <h1>🥊 AI Sparring Partner</h1>
 
+    <div id="roundCounter">Round 1 of 1</div>
     <div id="timer">00:00</div>
     <div id="status">Ready</div>
 
@@ -31,7 +33,9 @@
     </div>
 
     <div class="settings">
-        <label>Round Time (min): <input type="number" id="roundTime" value="3"></label><br><br>
+        <label>Round Time (min): <input type="number" id="roundTime" value="3" min="1"></label><br><br>
+        <label>Number of Rounds: <input type="number" id="numRounds" value="1" min="1"></label><br><br>
+        <label>Rest Time (sec): <input type="number" id="restTime" value="60" min="0"></label><br><br>
         <label>Min Interval (sec): <input type="number" id="minInt" value="2"></label><br>
         <label>Max Interval (sec): <input type="number" id="maxInt" value="5"></label>
     </div>
@@ -45,9 +49,13 @@
         let roundTimer;
         let actionTimer;
         let timeLeft = 0;
+        let currentRound = 1;
+        let totalRounds = 1;
+        let isResting = false;
 
         const statusEl = document.getElementById("status");
         const timerEl = document.getElementById("timer");
+        const roundCounterEl = document.getElementById("roundCounter");
 
         // === Text to Speech Setup ===
         const synth = window.speechSynthesis;
@@ -73,10 +81,21 @@
         // === Game Logic ===
         function startSparring() {
             if (isRunning) return;
+            
+            // Initialize rounds
+            currentRound = 1;
+            totalRounds = parseInt(document.getElementById("numRounds").value);
+            isResting = false;
+            
+            startRound();
+        }
+
+        function startRound() {
             isRunning = true;
             statusEl.innerText = "FIGHT!";
             speak("Fight!", "normal");
             updateStopButton(true);
+            updateRoundDisplay();
 
             // Set Round Time
             let minutes = document.getElementById("roundTime").value;
@@ -87,7 +106,7 @@
             roundTimer = setInterval(() => {
                 timeLeft--;
                 updateTimerDisplay();
-                if (timeLeft <= 0) stopSparring(true);
+                if (timeLeft <= 0) endRound();
             }, 1000);
 
             // Start Action Loop
@@ -102,39 +121,91 @@
             }
         }
 
-        function stopSparring(finished = false) {
+        function endRound() {
             isRunning = false;
             clearInterval(roundTimer);
             clearTimeout(actionTimer);
-            synth.cancel(); // Stop speaking immediately
-            statusEl.innerText = finished ? "Round Over" : "Paused";
-            if(finished) {
-                speak("Time!", "normal");
-                updateStopButton(true);
+            synth.cancel();
+            speak("Time!", "normal");
+            statusEl.innerText = "Round Over";
+            
+            // Check if there are more rounds
+            if (currentRound < totalRounds) {
+                currentRound++;
+                startRest();
             } else {
-                updateStopButton(false);
+                statusEl.innerText = "All Rounds Complete!";
+                speak("All rounds complete!", "normal");
+                updateStopButton(true);
             }
+        }
+
+        function startRest() {
+            isResting = true;
+            let restSeconds = parseInt(document.getElementById("restTime").value);
+            timeLeft = restSeconds;
+            statusEl.innerText = "REST";
+            speak("Rest", "normal");
+            updateRoundDisplay();
+            updateTimerDisplay();
+            
+            roundTimer = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                if (timeLeft <= 0) {
+                    clearInterval(roundTimer);
+                    isResting = false;
+                    startRound();
+                }
+            }, 1000);
+        }
+
+        function stopSparring() {
+            isRunning = false;
+            isResting = false;
+            clearInterval(roundTimer);
+            clearTimeout(actionTimer);
+            synth.cancel();
+            statusEl.innerText = "Paused";
+            updateStopButton(false);
         }
 
         function continueSparring() {
             if (timeLeft <= 0) {
-                alert("Round is over! Start a new round.");
+                alert("Round is over! Start a new session.");
                 return;
             }
-            isRunning = true;
-            statusEl.innerText = "FIGHT!";
-            speak("Fight!", "normal");
+            
             updateStopButton(true);
+            
+            if (isResting) {
+                // Continue resting
+                statusEl.innerText = "REST";
+                roundTimer = setInterval(() => {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    if (timeLeft <= 0) {
+                        clearInterval(roundTimer);
+                        isResting = false;
+                        startRound();
+                    }
+                }, 1000);
+            } else {
+                // Continue fighting
+                isRunning = true;
+                statusEl.innerText = "FIGHT!";
+                speak("Fight!", "normal");
 
-            // Resume Countdown
-            roundTimer = setInterval(() => {
-                timeLeft--;
-                updateTimerDisplay();
-                if (timeLeft <= 0) stopSparring(true);
-            }, 1000);
+                // Resume Countdown
+                roundTimer = setInterval(() => {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    if (timeLeft <= 0) endRound();
+                }, 1000);
 
-            // Resume Action Loop
-            scheduleNextMove();
+                // Resume Action Loop
+                scheduleNextMove();
+            }
         }
 
         function updateStopButton(isStop) {
@@ -184,6 +255,10 @@
             const m = Math.floor(timeLeft / 60);
             const s = timeLeft % 60;
             timerEl.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        function updateRoundDisplay() {
+            roundCounterEl.innerText = `Round ${currentRound} of ${totalRounds}`;
         }
     </script>
 </body>
